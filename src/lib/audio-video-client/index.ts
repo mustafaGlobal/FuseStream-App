@@ -8,6 +8,7 @@ interface VideoClientConstructor {
   peerId: string;
   mediasoupDevice: mediasoupTypes.Device;
   peer: Peer;
+  displayName: string;
 }
 
 export default class VideoClient {
@@ -21,13 +22,15 @@ export default class VideoClient {
   private recvTransport: mediasoupTypes.Transport;
   private webcamProducer: mediasoupTypes.Producer;
 
-  static async create(url: string, roomId: string, peerId: string) {
+  static async create(url: string, roomId: string, peerId: string, displayName: string) {
     const transport = await WebSocketTransport.create(
       url + '?roomId=' + roomId + '&peerId=' + peerId
     );
     const peer = new Peer(transport);
     const mediasoupDevice = new mediasoup.Device();
-    return new VideoClient({ roomId, peerId, mediasoupDevice, peer });
+    const routerRtpCapabilities: any = await peer.request('getRouterRtpCapabilities', {});
+    await mediasoupDevice.load({ routerRtpCapabilities });
+    return new VideoClient({ roomId, peerId, mediasoupDevice, peer, displayName });
   }
 
   constructor(arg: VideoClientConstructor) {
@@ -35,12 +38,26 @@ export default class VideoClient {
     this.peerId = arg.peerId;
     this.mediasoupDevice = arg.mediasoupDevice;
     this.peer = arg.peer;
-    this.displayName = 'Anonymous';
+    this.displayName = arg.displayName;
     this.device = getDeviceInfo();
+    this.handleNotifications();
   }
 
-  public async getRtpCapabilites() {
-    const routerRtpCapabilities: any = await this.peer.request('getRouterRtpCapabilities', {});
-    this.mediasoupDevice.load({ routerRtpCapabilities });
+  async join() {
+    const response = await this.peer.request('join', {
+      displayName: this.displayName,
+      device: this.device,
+      rtpCapabilites: this.mediasoupDevice.rtpCapabilities,
+      sctpCapabilites: this.mediasoupDevice.sctpCapabilities
+    });
+
+    console.log('JoinRoom:');
+    console.log(response);
+  }
+
+  private handleNotifications() {
+    this.peer.addListener('notification', (notification: Notification) => {
+      console.log('Notification: %o', notification);
+    });
   }
 }
