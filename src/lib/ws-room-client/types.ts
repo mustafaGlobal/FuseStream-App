@@ -1,5 +1,5 @@
-type RequestResponseMethod = 'getRouterRtpCapabilities' | 'createSendTransport';
-type NotificationMethod = '';
+type RequestResponseMethod = 'getRouterRtpCapabilities' | 'join';
+type NotificationMethod = 'peerClosed';
 
 type Method = RequestResponseMethod | NotificationMethod;
 

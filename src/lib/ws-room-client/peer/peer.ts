@@ -35,7 +35,6 @@ class Peer extends SafeEventEmitter {
 
     logger.debug('request() method:%s, requestId: %s', method, request.id);
 
-    console.log('sending request ', request);
     this.transport.send(request);
 
     return new Promise((pResolve, pReject) => {
@@ -64,7 +63,6 @@ class Peer extends SafeEventEmitter {
       };
 
       this.sentRequests.set(request.id, sentRequest);
-      console.log(this.sentRequests);
     });
   }
 
@@ -130,8 +128,6 @@ class Peer extends SafeEventEmitter {
     });
 
     this.transport.on('message', (message: WebSocketMessage) => {
-      console.log('Message recived: ');
-      console.log(message);
       switch (message.type) {
         case MsgType.Response:
           this.handleResponse(message);
