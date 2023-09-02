@@ -12,15 +12,16 @@ interface VideoClientConstructor {
 }
 
 export default class VideoClient {
-  private roomId: string;
-  private peerId: string;
+  private closed: boolean = false;
   private device: object;
   private mediasoupDevice: mediasoupTypes.Device;
   private peer: Peer;
   private displayName: string;
-  private sendTransport: mediasoupTypes.Transport;
-  private recvTransport: mediasoupTypes.Transport;
-  private webcamProducer: mediasoupTypes.Producer;
+
+  private sendTransport: mediasoupTypes.Transport | null = null;
+  private recvTransport: mediasoupTypes.Transport | null = null;
+  private producer: mediasoupTypes.Producer | null = null;
+  private consumers: Map<string, mediasoupTypes.Consumer> = new Map();
 
   static async create(url: string, roomId: string, peerId: string, displayName: string) {
     const transport = await WebSocketTransport.create(
@@ -34,8 +35,6 @@ export default class VideoClient {
   }
 
   constructor(arg: VideoClientConstructor) {
-    this.roomId = arg.roomId;
-    this.peerId = arg.peerId;
     this.mediasoupDevice = arg.mediasoupDevice;
     this.peer = arg.peer;
     this.displayName = arg.displayName;
@@ -43,16 +42,28 @@ export default class VideoClient {
     this.handleNotifications();
   }
 
+  close() {
+    if (this.closed) {
+      return;
+    }
+
+    this.closed = true;
+    this.peer.close();
+    if (this.sendTransport) {
+      this.sendTransport.close();
+    }
+    if (this.recvTransport) {
+      this.recvTransport.close();
+    }
+  }
+
   async join() {
-    const response = await this.peer.request('join', {
+    await this.peer.request('join', {
       displayName: this.displayName,
       device: this.device,
       rtpCapabilites: this.mediasoupDevice.rtpCapabilities,
       sctpCapabilites: this.mediasoupDevice.sctpCapabilities
     });
-
-    console.log('JoinRoom:');
-    console.log(response);
   }
 
   private handleNotifications() {
