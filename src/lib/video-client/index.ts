@@ -54,6 +54,10 @@ export default class VideoClient {
     this.peer.addListener('notification', (notification: Notification) => {
       this.handleNotifications(notification);
     });
+
+    this.peer.addListener('request', (request: Request, accept: Function, reject: Function) => {
+      this.handleRequests(request, accept, reject);
+    });
   }
 
   close() {
@@ -85,5 +89,9 @@ export default class VideoClient {
 
   private handleNotifications(notification: Notification) {
     console.log('Notification: %o', notification);
+  }
+
+  private handleRequests(request: Request, accept: Function, reject: Function) {
+    console.log('Request: %o', request);
   }
 }

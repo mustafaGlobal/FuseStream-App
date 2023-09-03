@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { useAudioVideoStore } from '@/stores/audio-video';
+import { useVideoStore } from '@/stores/video';
 
-const audioVideoStore = useAudioVideoStore();
+const videoStore = useVideoStore();
 
 async function joinRoom() {
   try {
-    await audioVideoStore.joinRoom();
+    await videoStore.joinRoom();
   } catch (error) {
     console.error('Error connecting: %o', error);
   }
