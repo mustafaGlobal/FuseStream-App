@@ -33,6 +33,7 @@ export default class VideoClient {
     const mediasoupDevice = new mediasoup.Device();
     const routerRtpCapabilities: any = await peer.request('getRouterRtpCapabilities', {});
     await mediasoupDevice.load({ routerRtpCapabilities });
+
     return new VideoClient({ roomId, peerId, mediasoupDevice, peer, displayName });
   }
 
@@ -41,7 +42,18 @@ export default class VideoClient {
     this.peer = arg.peer;
     this.displayName = arg.displayName;
     this.device = getDeviceInfo();
-    this.handleNotifications();
+
+    this.peer.addListener('open', async () => {
+      await this.join();
+    });
+
+    this.peer.addListener('close', () => {
+      this.close();
+    });
+
+    this.peer.addListener('notification', (notification: Notification) => {
+      this.handleNotifications(notification);
+    });
   }
 
   close() {
@@ -71,9 +83,7 @@ export default class VideoClient {
     await this.peer.request('join', joinReq);
   }
 
-  private handleNotifications() {
-    this.peer.addListener('notification', (notification: Notification) => {
-      console.log('Notification: %o', notification);
-    });
+  private handleNotifications(notification: Notification) {
+    console.log('Notification: %o', notification);
   }
 }
