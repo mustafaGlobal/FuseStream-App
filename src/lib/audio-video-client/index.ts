@@ -2,6 +2,7 @@ import * as mediasoup from 'mediasoup-client';
 import { types as mediasoupTypes } from 'mediasoup-client';
 import { Peer, WebSocketTransport } from '@/lib/ws-room-client';
 import { getDeviceInfo } from './deviceInfo';
+import type { joinRequest } from '../ws-room-client/types';
 
 interface VideoClientConstructor {
   roomId: string;
@@ -28,6 +29,7 @@ export default class VideoClient {
       url + '?roomId=' + roomId + '&peerId=' + peerId
     );
     const peer = new Peer(transport);
+
     const mediasoupDevice = new mediasoup.Device();
     const routerRtpCapabilities: any = await peer.request('getRouterRtpCapabilities', {});
     await mediasoupDevice.load({ routerRtpCapabilities });
@@ -51,19 +53,22 @@ export default class VideoClient {
     this.peer.close();
     if (this.sendTransport) {
       this.sendTransport.close();
+      this.sendTransport = null;
     }
     if (this.recvTransport) {
       this.recvTransport.close();
+      this.recvTransport = null;
     }
   }
 
   async join() {
-    await this.peer.request('join', {
+    const joinReq: joinRequest = {
       displayName: this.displayName,
       device: this.device,
-      rtpCapabilites: this.mediasoupDevice.rtpCapabilities,
-      sctpCapabilites: this.mediasoupDevice.sctpCapabilities
-    });
+      rtpCapabilites: this.mediasoupDevice.rtpCapabilities
+    };
+
+    await this.peer.request('join', joinReq);
   }
 
   private handleNotifications() {
