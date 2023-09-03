@@ -2,7 +2,8 @@ import * as mediasoup from 'mediasoup-client';
 import { types as mediasoupTypes } from 'mediasoup-client';
 import { Peer, WebSocketTransport } from '@/lib/ws-room-client';
 import { getDeviceInfo } from './deviceInfo';
-import type { joinRequest } from '../ws-room-client/types';
+import type { joinRequest, Notification, Request } from '../ws-room-client/types';
+import { EventEmitter } from 'events';
 
 interface VideoClientConstructor {
   roomId: string;
@@ -12,7 +13,7 @@ interface VideoClientConstructor {
   displayName: string;
 }
 
-export default class VideoClient {
+export default class VideoClient extends EventEmitter {
   private closed: boolean = false;
   private device: object;
   private mediasoupDevice: mediasoupTypes.Device;
@@ -21,6 +22,7 @@ export default class VideoClient {
 
   private sendTransport: mediasoupTypes.Transport | null = null;
   private recvTransport: mediasoupTypes.Transport | null = null;
+
   private producer: mediasoupTypes.Producer | null = null;
   private consumers: Map<string, mediasoupTypes.Consumer> = new Map();
 
@@ -38,6 +40,7 @@ export default class VideoClient {
   }
 
   constructor(arg: VideoClientConstructor) {
+    super();
     this.mediasoupDevice = arg.mediasoupDevice;
     this.peer = arg.peer;
     this.displayName = arg.displayName;
@@ -88,7 +91,18 @@ export default class VideoClient {
   }
 
   private handleNotifications(notification: Notification) {
-    console.log('Notification: %o', notification);
+    switch (notification.method) {
+      case 'newPeer':
+        this.emit('newPeer', notification.data);
+        break;
+
+      case 'peerClosed':
+        this.emit('removePeer', notification.data);
+        break;
+
+      default:
+        break;
+    }
   }
 
   private handleRequests(request: Request, accept: Function, reject: Function) {

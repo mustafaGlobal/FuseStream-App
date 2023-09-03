@@ -35,7 +35,7 @@ enum MsgType {
 
 interface Request {
   type: MsgType.Request;
-  method: string;
+  method: RequestResponseMethod;
   id: string;
   data: any;
 }
@@ -105,7 +105,7 @@ interface requestConsumerKeyFrameRequest {
 
 interface Response {
   type: MsgType.Response;
-  method: string;
+  method: RequestResponseMethod;
   id: string;
   success: boolean;
   error?: string;
@@ -114,7 +114,7 @@ interface Response {
 
 interface Notification {
   type: MsgType.Notification;
-  method: string;
+  method: NotificationMethod;
   data: any;
 }
 
