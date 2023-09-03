@@ -5,6 +5,7 @@ import type {
   NotificationMethod,
   RequestResponseMethod,
   WebSocketMessage,
+  Request,
   Response,
   Notification
 } from '../types';
@@ -129,6 +130,10 @@ class Peer extends SafeEventEmitter {
 
     this.transport.on('message', (message: WebSocketMessage) => {
       switch (message.type) {
+        case MsgType.Request:
+          this.handleRequest(message);
+          break;
+
         case MsgType.Response:
           this.handleResponse(message);
           break;
@@ -142,6 +147,26 @@ class Peer extends SafeEventEmitter {
           break;
       }
     });
+  }
+
+  private handleRequest(request: Request) {
+    try {
+      this.emit(
+        'request',
+        request,
+        (data: any) => {
+          const response = Message.createSuccessResponse(request, data);
+          this.transport.send(response);
+        },
+        (error: string) => {
+          const response = Message.createErrorResponse(request, error);
+          this.transport.send(response);
+        }
+      );
+    } catch (error) {
+      const response = Message.createErrorResponse(request, String(error));
+      this.transport.send(response);
+    }
   }
 
   private handleResponse(response: Response) {
