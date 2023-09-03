@@ -12,7 +12,10 @@ export const useVideoStore = defineStore('VideoStore', {
   },
   actions: {
     async joinRoom() {
-      this.client = await VideoClient.create(url, 'test', shortUUID.generate(), 'Name');
+      const uuid: string = shortUUID.generate();
+      const displayName: string = 'User-' + uuid;
+      const roomId: string = 'test';
+      this.client = await VideoClient.create(url, roomId, uuid, displayName);
     }
   }
 });

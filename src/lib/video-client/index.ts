@@ -43,7 +43,7 @@ export default class VideoClient {
     this.displayName = arg.displayName;
     this.device = getDeviceInfo();
 
-    this.peer.addListener('open', async () => {
+    this.peer.on('open', async () => {
       await this.join();
     });
 

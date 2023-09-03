@@ -6,8 +6,7 @@ const logger = createLogger('WebSocketTransport');
 
 class WebSocketTransport extends SafeEventEmitter {
   private ws: WebSocket;
-  private closed: boolean;
-  private connected: boolean;
+  private closed: boolean = true;
 
   static async create(url: string): Promise<WebSocketTransport> {
     try {
@@ -34,19 +33,14 @@ class WebSocketTransport extends SafeEventEmitter {
 
   constructor(ws: WebSocket) {
     super();
-    this.closed = false;
-    this.connected = true;
     this.ws = ws;
-    this.safeEmit('open');
+
+    this.closed = false;
     this.handleConnection();
   }
 
   public isClosed(): boolean {
     return this.closed;
-  }
-
-  public isConnected(): boolean {
-    return this.connected;
   }
 
   public close(): void {
@@ -81,7 +75,6 @@ class WebSocketTransport extends SafeEventEmitter {
     if (this.ws) {
       this.ws.addEventListener('close', (event) => {
         logger.debug('connection close event [code:%d. reason:%s]', event.code, event.reason);
-        this.connected = false;
         this.closed = true;
         this.safeEmit('close');
       });
@@ -90,8 +83,9 @@ class WebSocketTransport extends SafeEventEmitter {
         if (this.closed) {
           return;
         }
-
         logger.error('connection error event: [error:%s]', error);
+
+        this.close();
       });
 
       this.ws.addEventListener('message', (raw: any) => {
@@ -112,6 +106,10 @@ class WebSocketTransport extends SafeEventEmitter {
 
         this.safeEmit('message', message);
       });
+
+      setTimeout(() => {
+        this.safeEmit('open');
+      }, 100);
     }
   }
 }
