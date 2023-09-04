@@ -87,7 +87,9 @@ export default class VideoClient extends EventEmitter {
       rtpCapabilites: this.mediasoupDevice.rtpCapabilities
     };
 
-    await this.peer.request('join', joinReq);
+    const peerInfo = await this.peer.request('join', joinReq);
+
+    this.emit('join', peerInfo);
   }
 
   private handleNotifications(notification: Notification) {

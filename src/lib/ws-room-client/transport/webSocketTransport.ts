@@ -109,7 +109,7 @@ class WebSocketTransport extends SafeEventEmitter {
 
       setTimeout(() => {
         this.safeEmit('open');
-      }, 100);
+      }, 30);
     }
   }
 }

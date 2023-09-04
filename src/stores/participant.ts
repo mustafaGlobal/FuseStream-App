@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, acceptHMRUpdate } from 'pinia';
 import type { VideoParticipant } from './video';
 
 interface Device {
@@ -78,10 +78,14 @@ export const useParticipantStore = defineStore('participantStore', {
       }
     },
 
-    removeParticipant(idToRemove: string) {
-      this.participants = this.participants.filter((participant) => participant.id !== idToRemove);
+    removeParticipant(id: string) {
+      this.participants = this.participants.filter((participant) => participant.id !== id);
     }
   }
 });
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useParticipantStore, import.meta.hot));
+}
 
 export type { Participant, Status, VideoStatus, Device };
