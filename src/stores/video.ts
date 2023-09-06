@@ -7,7 +7,7 @@ import { createLogger } from '@/lib/logger';
 
 const url = 'ws://localhost:8000/ws';
 
-const logger = createLogger('videoStore');
+const logger = createLogger('video');
 
 interface VideoParticipant {
   id: string;

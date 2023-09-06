@@ -2,8 +2,20 @@ import * as mediasoup from 'mediasoup-client';
 import { types as mediasoupTypes } from 'mediasoup-client';
 import { Peer, WebSocketTransport } from '@/lib/ws-room-client';
 import { getDeviceInfo } from './deviceInfo';
-import type { joinRequest, Notification, Request } from '../ws-room-client/types';
+import type {
+  consumerClosedNotification,
+  consumerLayersChangedNotification,
+  consumerPausedNotification,
+  consumerResumedNotification,
+  joinRequest,
+  newConsumerRequest,
+  newPeerNotification,
+  Notification,
+  peerClosedNotification,
+  Request
+} from '../ws-room-client/types';
 import { EventEmitter } from 'events';
+import { createLogger } from '@/lib/logger';
 
 interface VideoClientConstructor {
   roomId: string;
@@ -12,6 +24,8 @@ interface VideoClientConstructor {
   peer: Peer;
   displayName: string;
 }
+
+const logger = createLogger('videoClient');
 
 export default class VideoClient extends EventEmitter {
   private closed: boolean = false;
@@ -47,6 +61,7 @@ export default class VideoClient extends EventEmitter {
     this.device = getDeviceInfo();
 
     this.peer.on('open', async () => {
+      logger.info('joining room...');
       await this.join();
     });
 
@@ -78,6 +93,8 @@ export default class VideoClient extends EventEmitter {
       this.recvTransport.close();
       this.recvTransport = null;
     }
+
+    this.emit('close');
   }
 
   async join() {
@@ -94,20 +111,61 @@ export default class VideoClient extends EventEmitter {
 
   private handleNotifications(notification: Notification) {
     switch (notification.method) {
-      case 'newPeer':
-        this.emit('newPeer', notification.data);
+      case 'newPeer': {
+        const newPeerNotificationData: newPeerNotification = notification.data;
+        this.emit('newPeer', newPeerNotificationData);
         break;
+      }
 
-      case 'peerClosed':
-        this.emit('removePeer', notification.data);
+      case 'peerClosed': {
+        const peerClosedNotificationData: peerClosedNotification = notification.data;
+        this.emit('removePeer', peerClosedNotificationData);
         break;
+      }
+
+      case 'consumerClosed': {
+        const { peerId, consumerId }: consumerClosedNotification = notification.data;
+        logger.info(`Peer {${peerId}} consumer closed event for consumer {${consumerId}}`);
+        break;
+      }
+
+      case 'consumerPaused': {
+        const { peerId, consumerId }: consumerPausedNotification = notification.data;
+        logger.info(`Peer {${peerId}} consumer paused event for consumer {${consumerId}}`);
+        break;
+      }
+
+      case 'consumerResumed': {
+        const { peerId, consumerId }: consumerResumedNotification = notification.data;
+        logger.info(`Peer {${peerId}} consumer resumed event for consumer {${consumerId}}`);
+        break;
+      }
+
+      case 'consumerLayersChanged': {
+        const { peerId, consumerId }: consumerLayersChangedNotification = notification.data;
+        logger.info(`Peer {${peerId}} consumer layers change event for consumer {${consumerId}}`);
+        break;
+      }
 
       default:
+        logger.warn('unhandled notification recived: %o', notification);
         break;
     }
   }
 
   private handleRequests(request: Request, accept: Function, reject: Function) {
-    console.log('Request: %o', request);
+    switch (request.method) {
+      case 'newConsumer': {
+        const consumer: newConsumerRequest = request.data;
+        logger.info('New consumer request, consumer: %o', consumer);
+        accept();
+        break;
+      }
+
+      default:
+        logger.warn('unhandled request recived %o', request);
+        reject();
+        break;
+    }
   }
 }
