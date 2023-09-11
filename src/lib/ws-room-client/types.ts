@@ -46,6 +46,13 @@ interface createWebRtcTransportRequest {
   consuming: boolean;
 }
 
+interface createWebRtcTransportResponse {
+  id: string;
+  iceParameters: mediasoupTypes.IceParameters;
+  iceCandidates: mediasoupTypes.IceCandidate[];
+  dtlsParamters: mediasoupTypes.DtlsParameters;
+}
+
 interface connectWebRtcTransportRequest {
   transportId: string;
   dtlsParameters: mediasoupTypes.DtlsParameters;
@@ -55,10 +62,24 @@ interface restartIceRequest {
   transportId: string;
 }
 
+interface restartIceResponse {
+  iceParameters: mediasoupTypes.IceParameters;
+}
+
 interface joinRequest {
   displayName: string;
   device: object;
   rtpCapabilites: mediasoupTypes.RtpCapabilities;
+}
+
+interface peerInfo {
+  id: string;
+  displayName: string;
+  device: any;
+}
+
+interface joinResponse {
+  peers: peerInfo[];
 }
 
 interface produceRequest {
@@ -66,6 +87,10 @@ interface produceRequest {
   kind: mediasoupTypes.MediaKind;
   rtpParameters: mediasoupTypes.RtpParameters;
   appData: any;
+}
+
+interface produceResponse {
+  producerId: string;
 }
 
 interface newConsumerRequest {
@@ -164,10 +189,14 @@ type WebSocketMessage = Request | Response | Notification;
 
 export type {
   createWebRtcTransportRequest,
+  createWebRtcTransportResponse,
   connectWebRtcTransportRequest,
   restartIceRequest,
+  restartIceResponse,
   joinRequest,
+  joinResponse,
   produceRequest,
+  produceResponse,
   closeProducerRequest,
   pauseProducerRequest,
   newConsumerRequest,
