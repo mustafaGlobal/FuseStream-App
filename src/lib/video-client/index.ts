@@ -18,6 +18,7 @@ import type {
   Notification,
   peerClosedNotification,
   produceRequest,
+  produceResponse,
   Request
 } from '../ws-room-client/types';
 import { EventEmitter } from 'events';
@@ -190,8 +191,8 @@ export default class VideoClient extends EventEmitter {
             };
 
             try {
-              const { id } = await this.peer.request('produce', req);
-              callback({ id });
+              const resp: produceResponse = await this.peer.request('produce', req);
+              callback({ id: resp.producerId });
             } catch (error: any) {
               errback(error);
             }
@@ -330,13 +331,11 @@ export default class VideoClient extends EventEmitter {
   }
 
   public async disableVideo() {
-    logger.debug('disableVideo()');
+    logger.debug('disableVideo() | producer: %o', this.producer);
 
     if (!this.producer) {
       return;
     }
-
-    this.producer?.close();
 
     this.emit('videoInProgress', false);
 
@@ -347,6 +346,9 @@ export default class VideoClient extends EventEmitter {
     const req: closeProducerRequest = {
       producerId: this.producer.id
     };
+
+    this.producer?.close();
+
     await this.peer.request('closeProducer', req);
 
     this.producer = null;

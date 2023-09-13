@@ -65,12 +65,19 @@ export const useVideoStore = defineStore('videoStore', {
         participantStore.removeParticipant(data.peerId);
       });
 
+      this.client?.on('addProducer', (addProducer: any) => {
+        logger.info('addProducerEvent %o', addProducer);
+      });
+
       this.client.on('close', () => {
         this.status = Status.closed;
       });
     },
     async enableVideo() {
       this.client?.enableVideo();
+    },
+    async disableVideo() {
+      this.client?.disableVideo();
     }
   }
 });
