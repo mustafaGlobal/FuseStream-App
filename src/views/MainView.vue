@@ -11,6 +11,14 @@ async function joinRoom() {
   }
 }
 
+async function enableCamera() {
+  try {
+    await videoStore.enableVideo();
+  } catch (error) {
+    console.error('Error enabling camera: %o', error);
+  }
+}
+
 joinRoom();
 </script>
 
@@ -35,24 +43,10 @@ joinRoom();
       <!-- Buttons Section -->
       <div class="flex justify-center mt-4 space-x-4">
         <button
-          id="btnCam"
           class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          disabled
+          @click="enableCamera()"
         >
-          publishVideo
-        </button>
-        <button
-          id="btnScreen"
-          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          disabled
-        >
-          publishScreen
-        </button>
-        <button
-          id="btnSub"
-          class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-        >
-          subscribe
+          enableCamera
         </button>
       </div>
     </div>

@@ -74,8 +74,17 @@ export default class VideoClient extends EventEmitter {
     const peer = new Peer(transport);
 
     const mediasoupDevice = new mediasoup.Device();
-    const routerRtpCapabilities: any = await peer.request('getRouterRtpCapabilities', {});
+    const routerRtpCapabilities: mediasoupTypes.RtpCapabilities = await peer.request(
+      'getRouterRtpCapabilities',
+      {}
+    );
+
     await mediasoupDevice.load({ routerRtpCapabilities });
+
+    if (!mediasoupDevice.canProduce('video')) {
+      console.error('cannot produce video');
+      throw 'cant produce video';
+    }
 
     return new VideoClient({
       roomId,
@@ -135,69 +144,105 @@ export default class VideoClient extends EventEmitter {
   }
 
   private async join() {
-    const joinReq: joinRequest = {
-      displayName: this.displayName,
-      device: this.device,
-      rtpCapabilites: this.mediasoupDevice.rtpCapabilities
-    };
+    try {
+      const produceTransportReq: createWebRtcTransportRequest = {
+        forceTcp: false,
+        producing: true,
+        consuming: false
+      };
 
-    const req: createWebRtcTransportRequest = {
-      forceTcp: false,
-      producing: true,
-      consuming: false
-    };
+      const producerTransportInfo: createWebRtcTransportResponse = await this.peer.request(
+        'createWebRtcTransport',
+        produceTransportReq
+      );
 
-    const transportInfo: createWebRtcTransportResponse = await this.peer.request(
-      'createWebRtcTransport',
-      req
-    );
+      this.sendTransport = this.mediasoupDevice.createSendTransport({
+        id: producerTransportInfo.id,
+        iceParameters: producerTransportInfo.iceParameters,
+        iceCandidates: producerTransportInfo.iceCandidates,
+        dtlsParameters: {
+          ...producerTransportInfo.dtlsParamters,
+          role: 'auto'
+        },
+        iceServers: []
+      });
 
-    this.sendTransport = this.mediasoupDevice.createSendTransport({
-      id: transportInfo.id,
-      iceParameters: transportInfo.iceParameters,
-      iceCandidates: transportInfo.iceCandidates,
-      dtlsParameters: {
-        ...transportInfo.dtlsParamters,
-        role: 'auto'
-      },
-      iceServers: []
-    });
-
-    this.sendTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
-      if (this.sendTransport) {
-        const req: connectWebRtcTransportRequest = {
-          transportId: this.sendTransport.id,
-          dtlsParameters
-        };
-
-        this.peer.request('connectWebRtcTransport', req).then(callback).catch(errback);
-      }
-    });
-
-    this.sendTransport.on(
-      'produce',
-      async ({ kind, rtpParameters, appData }, callback, errback) => {
+      this.sendTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
         if (this.sendTransport) {
-          const req: produceRequest = {
-            transportId: this.sendTransport?.id,
-            kind: kind,
-            rtpParameters: rtpParameters,
-            appData: appData
+          const req: connectWebRtcTransportRequest = {
+            transportId: this.sendTransport.id,
+            dtlsParameters
           };
 
-          try {
-            const { id } = await this.peer.request('produce', req);
-            callback({ id });
-          } catch (error: any) {
-            errback(error);
+          this.peer.request('connectWebRtcTransport', req).then(callback).catch(errback);
+        }
+      });
+
+      this.sendTransport.on(
+        'produce',
+        async ({ kind, rtpParameters, appData }, callback, errback) => {
+          if (this.sendTransport) {
+            const req: produceRequest = {
+              transportId: this.sendTransport?.id,
+              kind: kind,
+              rtpParameters: rtpParameters,
+              appData: appData
+            };
+
+            try {
+              const { id } = await this.peer.request('produce', req);
+              callback({ id });
+            } catch (error: any) {
+              errback(error);
+            }
           }
         }
-      }
-    );
+      );
 
-    const resp: joinResponse = await this.peer.request('join', joinReq);
+      const consumerTransportReq: createWebRtcTransportRequest = {
+        forceTcp: false,
+        producing: false,
+        consuming: true
+      };
 
-    this.emit('join', resp.peers);
+      const consumeTransportInfo: createWebRtcTransportResponse = await this.peer.request(
+        'createWebRtcTransport',
+        consumerTransportReq
+      );
+
+      this.recvTransport = this.mediasoupDevice.createRecvTransport({
+        id: consumeTransportInfo.id,
+        iceParameters: consumeTransportInfo.iceParameters,
+        iceCandidates: consumeTransportInfo.iceCandidates,
+        dtlsParameters: {
+          ...consumeTransportInfo.dtlsParamters,
+          role: 'auto'
+        },
+        iceServers: []
+      });
+
+      this.recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+        if (this.recvTransport) {
+          const req: connectWebRtcTransportRequest = {
+            transportId: this.recvTransport?.id,
+            dtlsParameters: dtlsParameters
+          };
+          this.peer.request('connectWebRtcTransport', req).then(callback).catch(errback);
+        }
+      });
+
+      const joinReq: joinRequest = {
+        displayName: this.displayName,
+        device: this.device,
+        rtpCapabilites: this.mediasoupDevice.rtpCapabilities
+      };
+
+      const resp: joinResponse = await this.peer.request('join', joinReq);
+
+      this.emit('join', resp.peers);
+    } catch (error: any) {
+      logger.error('join() failed: %o', error);
+    }
   }
 
   public async enableVideo() {
@@ -207,7 +252,7 @@ export default class VideoClient extends EventEmitter {
       return;
     }
 
-    if (this.mediasoupDevice.canProduce('video')) {
+    if (!this.mediasoupDevice.canProduce('video')) {
       logger.error('enableVideo() | can not produce video');
       return;
     }

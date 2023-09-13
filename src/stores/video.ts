@@ -68,6 +68,9 @@ export const useVideoStore = defineStore('videoStore', {
       this.client.on('close', () => {
         this.status = Status.closed;
       });
+    },
+    async enableVideo() {
+      this.client?.enableVideo();
     }
   }
 });
