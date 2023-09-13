@@ -3,20 +3,34 @@ import { types as mediasoupTypes } from 'mediasoup-client';
 import { Peer, WebSocketTransport } from '@/lib/ws-room-client';
 import { getDeviceInfo } from './deviceInfo';
 import type {
+  closeProducerRequest,
+  connectWebRtcTransportRequest,
   consumerClosedNotification,
   consumerLayersChangedNotification,
   consumerPausedNotification,
   consumerResumedNotification,
+  createWebRtcTransportRequest,
+  createWebRtcTransportResponse,
   joinRequest,
   joinResponse,
   newConsumerRequest,
   newPeerNotification,
   Notification,
   peerClosedNotification,
+  produceRequest,
   Request
 } from '../ws-room-client/types';
 import { EventEmitter } from 'events';
 import { createLogger } from '@/lib/logger';
+
+interface VideoClientCreator {
+  url: string;
+  roomId: string;
+  peerId: string;
+  displayName: string;
+  svcEnabled: boolean;
+  numOfSimulcastStreams: number;
+}
 
 interface VideoClientConstructor {
   roomId: string;
@@ -24,6 +38,8 @@ interface VideoClientConstructor {
   mediasoupDevice: mediasoupTypes.Device;
   peer: Peer;
   displayName: string;
+  svcEnabled: boolean;
+  numOfSimulcastStreams: number;
 }
 
 const logger = createLogger('videoClient');
@@ -35,13 +51,23 @@ export default class VideoClient extends EventEmitter {
   private peer: Peer;
   private displayName: string;
 
+  private svcEnabled: boolean = false;
+  private numOfSimulcastStreams: number = 0;
+
   private sendTransport: mediasoupTypes.Transport | null = null;
   private recvTransport: mediasoupTypes.Transport | null = null;
 
-  private producer: mediasoupTypes.Producer | null = null;
+  private producer: mediasoupTypes.Producer | undefined | null = undefined;
   private consumers: Map<string, mediasoupTypes.Consumer> = new Map();
 
-  static async create(url: string, roomId: string, peerId: string, displayName: string) {
+  static async create({
+    url,
+    roomId,
+    peerId,
+    displayName,
+    svcEnabled,
+    numOfSimulcastStreams
+  }: VideoClientCreator) {
     const transport = await WebSocketTransport.create(
       url + '?roomId=' + roomId + '&peerId=' + peerId
     );
@@ -51,7 +77,15 @@ export default class VideoClient extends EventEmitter {
     const routerRtpCapabilities: any = await peer.request('getRouterRtpCapabilities', {});
     await mediasoupDevice.load({ routerRtpCapabilities });
 
-    return new VideoClient({ roomId, peerId, mediasoupDevice, peer, displayName });
+    return new VideoClient({
+      roomId,
+      peerId,
+      mediasoupDevice,
+      peer,
+      displayName,
+      svcEnabled,
+      numOfSimulcastStreams
+    });
   }
 
   constructor(arg: VideoClientConstructor) {
@@ -59,6 +93,8 @@ export default class VideoClient extends EventEmitter {
     this.mediasoupDevice = arg.mediasoupDevice;
     this.peer = arg.peer;
     this.displayName = arg.displayName;
+    this.svcEnabled = arg.svcEnabled;
+    this.numOfSimulcastStreams = arg.numOfSimulcastStreams;
     this.device = getDeviceInfo();
 
     this.peer.on('open', async () => {
@@ -98,16 +134,177 @@ export default class VideoClient extends EventEmitter {
     this.emit('close');
   }
 
-  async join() {
+  private async join() {
     const joinReq: joinRequest = {
       displayName: this.displayName,
       device: this.device,
       rtpCapabilites: this.mediasoupDevice.rtpCapabilities
     };
 
+    const req: createWebRtcTransportRequest = {
+      forceTcp: false,
+      producing: true,
+      consuming: false
+    };
+
+    const transportInfo: createWebRtcTransportResponse = await this.peer.request(
+      'createWebRtcTransport',
+      req
+    );
+
+    this.sendTransport = this.mediasoupDevice.createSendTransport({
+      id: transportInfo.id,
+      iceParameters: transportInfo.iceParameters,
+      iceCandidates: transportInfo.iceCandidates,
+      dtlsParameters: {
+        ...transportInfo.dtlsParamters,
+        role: 'auto'
+      },
+      iceServers: []
+    });
+
+    this.sendTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+      if (this.sendTransport) {
+        const req: connectWebRtcTransportRequest = {
+          transportId: this.sendTransport.id,
+          dtlsParameters
+        };
+
+        this.peer.request('connectWebRtcTransport', req).then(callback).catch(errback);
+      }
+    });
+
+    this.sendTransport.on(
+      'produce',
+      async ({ kind, rtpParameters, appData }, callback, errback) => {
+        if (this.sendTransport) {
+          const req: produceRequest = {
+            transportId: this.sendTransport?.id,
+            kind: kind,
+            rtpParameters: rtpParameters,
+            appData: appData
+          };
+
+          try {
+            const { id } = await this.peer.request('produce', req);
+            callback({ id });
+          } catch (error: any) {
+            errback(error);
+          }
+        }
+      }
+    );
+
     const resp: joinResponse = await this.peer.request('join', joinReq);
 
     this.emit('join', resp.peers);
+  }
+
+  public async enableVideo() {
+    logger.debug('enableVideo()');
+
+    if (this.producer) {
+      return;
+    }
+
+    if (this.mediasoupDevice.canProduce('video')) {
+      logger.error('enableVideo() | can not produce video');
+      return;
+    }
+
+    this.emit('videoInProgress', true);
+
+    let track: MediaStreamTrack | null = null;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          frameRate: { ideal: 15, max: 30 },
+          facingMode: 'user'
+        },
+        audio: false
+      });
+
+      track = stream.getVideoTracks()[0];
+
+      const codecOptions: mediasoupTypes.ProducerCodecOptions = {
+        videoGoogleStartBitrate: 1000
+      };
+
+      let encodings: mediasoupTypes.RtpEncodingParameters[] = [];
+      if (this.svcEnabled) {
+        encodings = [
+          {
+            scaleResolutionDownBy: 1,
+            maxBitrate: 5000000,
+            scalabilityMode: 'L1T3'
+          }
+        ];
+
+        if (this.numOfSimulcastStreams > 1) {
+          encodings.unshift({
+            scaleResolutionDownBy: 2,
+            maxBitrate: 1000000,
+            scalabilityMode: 'L1T3'
+          });
+        }
+
+        if (this.numOfSimulcastStreams > 2) {
+          encodings.unshift({
+            scaleResolutionDownBy: 4,
+            maxBitrate: 500000,
+            scalabilityMode: 'L1T3'
+          });
+        }
+      }
+
+      this.producer = await this.sendTransport?.produce({ track, encodings, codecOptions });
+
+      this.emit('addProducer', {
+        id: this.producer?.id,
+        paused: this.producer?.paused,
+        track: this.producer?.track,
+        rtpParamaters: this.producer?.rtpParameters,
+        codec: this.producer?.rtpParameters.codecs[0].mimeType.split('/')[1]
+      });
+
+      this.producer?.on('transportclose', () => {
+        this.producer = null;
+      });
+
+      this.producer?.on('trackended', () => {
+        this.disableVideo().catch(() => {});
+      });
+    } catch (error) {
+      logger.error('enableVideo() | failed: %o', error);
+
+      track?.stop();
+      this.emit('videoInProgress', false);
+      return;
+    }
+  }
+
+  public async disableVideo() {
+    logger.debug('disableVideo()');
+
+    if (!this.producer) {
+      return;
+    }
+
+    this.producer?.close();
+
+    this.emit('videoInProgress', false);
+
+    this.emit('removeProducer', {
+      producerId: this.producer.id
+    });
+
+    const req: closeProducerRequest = {
+      producerId: this.producer.id
+    };
+    await this.peer.request('closeProducer', req);
+
+    this.producer = null;
   }
 
   private handleNotifications(notification: Notification) {

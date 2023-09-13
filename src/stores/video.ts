@@ -37,7 +37,14 @@ export const useVideoStore = defineStore('videoStore', {
       const displayName: string = 'User-' + uuid;
       const roomId: string = 'test';
 
-      this.client = await VideoClient.create(url, roomId, uuid, displayName);
+      this.client = await VideoClient.create({
+        url: url,
+        roomId: roomId,
+        peerId: uuid,
+        displayName: displayName,
+        svcEnabled: true,
+        numOfSimulcastStreams: 3
+      });
 
       this.client.on('join', (peers: VideoParticipant[]) => {
         this.status = Status.connected;
