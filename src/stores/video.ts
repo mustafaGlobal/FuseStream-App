@@ -1,4 +1,5 @@
 import { defineStore, acceptHMRUpdate } from 'pinia';
+import { types as mediasoupTypes } from 'mediasoup-client';
 import { useParticipantStore } from './participant';
 import type { Device } from './participant';
 import VideoClient from '@/lib/video-client';
@@ -15,6 +16,14 @@ interface VideoParticipant {
   device: Device;
 }
 
+interface Producer {
+  id: string;
+  paused: boolean;
+  track: MediaStreamTrack;
+  rtpParameters: mediasoupTypes.RtpParameters;
+  codec: string;
+}
+
 enum Status {
   closed = 'closed',
   connecting = 'connecting',
@@ -25,7 +34,8 @@ export const useVideoStore = defineStore('videoStore', {
   state: () => {
     return {
       status: Status.closed as Status,
-      client: null as VideoClient | null
+      client: null as VideoClient | null,
+      producer: null as Producer | null
     };
   },
   actions: {
@@ -65,8 +75,9 @@ export const useVideoStore = defineStore('videoStore', {
         participantStore.removeParticipant(data.peerId);
       });
 
-      this.client?.on('addProducer', (addProducer: any) => {
-        logger.info('addProducerEvent %o', addProducer);
+      this.client?.on('addProducer', (producer: Producer) => {
+        logger.info('addProducerEvent %o', producer);
+        this.producer = producer;
       });
 
       this.client.on('close', () => {

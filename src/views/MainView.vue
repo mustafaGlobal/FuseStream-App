@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { useVideoStore } from '@/stores/video';
+import { ref, watchEffect } from 'vue';
+
+const myVideo = ref<HTMLVideoElement>();
 
 const videoStore = useVideoStore();
 
@@ -28,6 +31,16 @@ async function disableCamera() {
 }
 
 joinRoom();
+
+watchEffect(() => {
+  if (myVideo.value) {
+    if (videoStore.producer) {
+      const mediaStream = new MediaStream();
+      mediaStream.addTrack(videoStore.producer.track);
+      myVideo.value.srcObject = mediaStream;
+    }
+  }
+});
 </script>
 
 <template>
@@ -36,13 +49,13 @@ joinRoom();
       <div class="flex flex-wrap justify-center">
         <!-- Left Video -->
         <div class="w-full md:w-1/2 px-4">
-          <video id="my-video" class="w-full h-auto bg-gray-800" controls>
+          <video ref="myVideo" muted autoplay class="w-full h-auto bg-gray-800">
             <!-- Add video source here -->
           </video>
         </div>
         <!-- Right Video -->
         <div class="w-full md:w-1/2 px-4">
-          <video id="remote-video" class="w-full h-auto bg-gray-800" controls>
+          <video id="remote-video" class="w-full h-auto bg-gray-800">
             <!-- Add video source here -->
           </video>
         </div>
