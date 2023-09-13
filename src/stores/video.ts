@@ -15,14 +15,22 @@ interface VideoParticipant {
   device: Device;
 }
 
+enum Status {
+  closed = 'closed',
+  connecting = 'connecting',
+  connected = 'connected'
+}
+
 export const useVideoStore = defineStore('videoStore', {
   state: () => {
     return {
+      status: Status.closed as Status,
       client: null as VideoClient | null
     };
   },
   actions: {
     async joinRoom() {
+      this.status = Status.connecting;
       const participantStore = useParticipantStore();
 
       const uuid: string = shortUUID.generate();
@@ -31,8 +39,9 @@ export const useVideoStore = defineStore('videoStore', {
 
       this.client = await VideoClient.create(url, roomId, uuid, displayName);
 
-      this.client.on('join', (data: { peers: VideoParticipant[] }) => {
-        const videoParticipants = data.peers;
+      this.client.on('join', (peers: VideoParticipant[]) => {
+        this.status = Status.connected;
+        const videoParticipants = peers;
         for (const videoParticipant of videoParticipants) {
           logger.info('new video participant: %o', videoParticipant);
           participantStore.addVideoParticipant(videoParticipant);
@@ -47,6 +56,10 @@ export const useVideoStore = defineStore('videoStore', {
       this.client.on('removePeer', (data: { peerId: string }) => {
         logger.info('video participant left with id: %o', data.peerId);
         participantStore.removeParticipant(data.peerId);
+      });
+
+      this.client.on('close', () => {
+        this.status = Status.closed;
       });
     }
   }

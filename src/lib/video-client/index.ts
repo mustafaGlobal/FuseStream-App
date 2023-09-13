@@ -8,6 +8,7 @@ import type {
   consumerPausedNotification,
   consumerResumedNotification,
   joinRequest,
+  joinResponse,
   newConsumerRequest,
   newPeerNotification,
   Notification,
@@ -104,9 +105,9 @@ export default class VideoClient extends EventEmitter {
       rtpCapabilites: this.mediasoupDevice.rtpCapabilities
     };
 
-    const peerInfo = await this.peer.request('join', joinReq);
+    const resp: joinResponse = await this.peer.request('join', joinReq);
 
-    this.emit('join', peerInfo);
+    this.emit('join', resp.peers);
   }
 
   private handleNotifications(notification: Notification) {

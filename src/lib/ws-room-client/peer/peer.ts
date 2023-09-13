@@ -29,7 +29,7 @@ class Peer extends SafeEventEmitter {
     this.handleTransport();
   }
 
-  public async request(method: RequestResponseMethod, data: any) {
+  public async request(method: RequestResponseMethod, data: any): Promise<any> {
     const request = Message.createRequest(method, data);
 
     logger.debug('request() method:%s, requestId: %s', method, request.id);
