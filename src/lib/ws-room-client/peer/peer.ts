@@ -1,35 +1,48 @@
-import { createLogger } from '@/lib/logger';
+import { createLogger } from '../../logger';
 import { Message } from '../transport/message';
 import SafeEventEmitter from '../utils/safeEventEmitter';
 import type {
-  NotificationMethod,
   RequestResponseMethod,
+  NotificationMethod,
   WebSocketMessage,
   Request,
   Response,
-  Notification
+  Notification,
+  NotificationData,
+  RequestData,
+  ResponseData
 } from '../types';
 import { MsgType } from '../types';
 import { WebSocketTransport } from '../transport/webSocketTransport';
 
-const logger = createLogger('Peer');
+const logger = createLogger('peer');
+
+interface PeerRequest {
+  type: MsgType;
+  id: string;
+  method: RequestResponseMethod;
+  resolve: (data: unknown) => void;
+  reject: (error: Error) => void;
+  timer: NodeJS.Timeout;
+  close: () => void;
+}
 
 class Peer extends SafeEventEmitter {
   private transport: WebSocketTransport;
-  private closed: boolean;
-  private sentRequests: Map<string, any>;
-  private timeout: number = 10000;
+  private closed = false;
+  private sentRequests: Map<string, PeerRequest> = new Map();
+  private timeout = 10000;
+  public id: string;
 
-  constructor(transport: WebSocketTransport) {
+  constructor(transport: WebSocketTransport, id: string) {
     super();
+    this.id = id;
     this.transport = transport;
-    this.closed = false;
-    this.sentRequests = new Map<string, any>();
 
     this.handleTransport();
   }
 
-  public async request(method: RequestResponseMethod, data: any): Promise<any> {
+  public async request(method: RequestResponseMethod, data?: RequestData) {
     const request = Message.createRequest(method, data);
 
     logger.debug('request() method:%s, requestId: %s', method, request.id);
@@ -37,14 +50,14 @@ class Peer extends SafeEventEmitter {
     this.transport.send(request);
 
     return new Promise((pResolve, pReject) => {
-      const sentRequest = {
+      const sentRequest: PeerRequest = {
         type: request.type,
         id: request.id,
         method: request.method,
-        resolve: (data2: any) => {
+        resolve: (data: unknown) => {
           this.sentRequests.delete(request.id);
           clearTimeout(sentRequest.timer);
-          pResolve(data2);
+          pResolve(data);
         },
         reject: (error: Error) => {
           this.sentRequests.delete(request.id);
@@ -65,7 +78,7 @@ class Peer extends SafeEventEmitter {
     });
   }
 
-  public notify(method: NotificationMethod, data: any) {
+  public notify(method: NotificationMethod, data: NotificationData) {
     const notification = Message.createNotification(method, data);
 
     logger.debug('notify() method:%s notification', method);
@@ -95,6 +108,11 @@ class Peer extends SafeEventEmitter {
   }
 
   private handleTransport(): void {
+    if (this.transport.isClosed()) {
+      this.closed = true;
+      this.safeEmit('close');
+    }
+
     this.transport.on('open', () => {
       if (this.closed) {
         return;
@@ -139,7 +157,7 @@ class Peer extends SafeEventEmitter {
       this.emit(
         'request',
         request,
-        (data: any) => {
+        (data: ResponseData) => {
           const response = Message.createSuccessResponse(request, data);
           this.transport.send(response);
         },
@@ -161,9 +179,9 @@ class Peer extends SafeEventEmitter {
     }
 
     if (response.success) {
-      request.resolve(response.data);
+      request?.resolve(response.data);
     } else {
-      request.reject(Error(response.error));
+      request?.reject(Error(response.error));
     }
   }
 

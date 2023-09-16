@@ -6,7 +6,7 @@ const logger = createLogger('WebSocketTransport');
 
 class WebSocketTransport extends SafeEventEmitter {
   private ws: WebSocket;
-  private closed: boolean = true;
+  private closed = true;
 
   static async create(url: string): Promise<WebSocketTransport> {
     try {
@@ -57,7 +57,7 @@ class WebSocketTransport extends SafeEventEmitter {
     }
   }
 
-  public send(message: any): void {
+  public send(message: object): void {
     if (this.closed) {
       throw Error('transport closed');
     }
@@ -88,7 +88,7 @@ class WebSocketTransport extends SafeEventEmitter {
         this.close();
       });
 
-      this.ws.addEventListener('message', (raw: any) => {
+      this.ws.addEventListener('message', (raw) => {
         if (this.closed) {
           return;
         }

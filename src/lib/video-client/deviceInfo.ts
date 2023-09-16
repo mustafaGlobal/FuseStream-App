@@ -1,6 +1,12 @@
 import bowser from 'bowser';
 
-const getDeviceInfo = () => {
+interface Device {
+  flag: string;
+  name: string;
+  version: string;
+}
+
+const getDeviceInfo = (): Device => {
   const ua = navigator.userAgent;
   const browser = bowser.getParser(ua);
   let flag;
@@ -12,11 +18,14 @@ const getDeviceInfo = () => {
   else if (browser.satisfies({ 'microsoft edge': '>=0' })) flag = 'edge';
   else flag = 'unknown';
 
-  return {
-    flag,
+  const device: Device = {
+    flag: flag,
     name: browser.getBrowserName(),
     version: browser.getBrowserVersion()
   };
+
+  return device;
 };
 
 export { getDeviceInfo };
+export type { Device };

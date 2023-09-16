@@ -1,15 +1,15 @@
 import { EventEmitter } from 'events';
-import { createLogger } from '@/lib/logger';
+import { createLogger } from '../../logger';
 
-const logger = createLogger('SafeEventEmitter');
+const logger = createLogger('safe-event-emmiter');
 
-class SafeEventEmitter extends EventEmitter {
+export default class SafeEventEmitter extends EventEmitter {
   constructor() {
     super();
     this.setMaxListeners(Infinity);
   }
 
-  safeEmit(event: string | symbol, ...args: any[]): void {
+  safeEmit(event: string | symbol, ...args: unknown[]): void {
     try {
       this.emit(event, ...args);
     } catch (error) {
@@ -17,5 +17,3 @@ class SafeEventEmitter extends EventEmitter {
     }
   }
 }
-
-export default SafeEventEmitter;

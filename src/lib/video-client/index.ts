@@ -1,25 +1,27 @@
 import * as mediasoup from 'mediasoup-client';
 import { types as mediasoupTypes } from 'mediasoup-client';
 import { Peer, WebSocketTransport } from '@/lib/ws-room-client';
-import { getDeviceInfo } from './deviceInfo';
+import { getDeviceInfo, type Device } from './deviceInfo';
 import type {
-  closeProducerRequest,
-  connectWebRtcTransportRequest,
-  consumerClosedNotification,
-  consumerLayersChangedNotification,
-  consumerPausedNotification,
-  consumerResumedNotification,
-  createWebRtcTransportRequest,
-  createWebRtcTransportResponse,
-  joinRequest,
-  joinResponse,
-  newConsumerRequest,
-  newPeerNotification,
+  CloseProducerRequest,
+  ConnectWebRtcTransportRequest,
+  ConsumerClosedNotification,
+  ConsumerLayersChangedNotification,
+  ConsumerPausedNotification,
+  ConsumerResumedNotification,
+  CreateWebRtcTransportRequest,
+  CreateWebRtcTransportResponse,
+  GetRouterRtpCapabilitiesResponse,
+  JoinRequest,
+  JoinResponse,
+  NewConsumerRequest,
+  NewPeerNotification,
   Notification,
-  peerClosedNotification,
-  produceRequest,
-  produceResponse,
-  Request
+  PeerClosedNotification,
+  ProduceRequest,
+  ProduceResponse,
+  Request,
+  ResponseData
 } from '../ws-room-client/types';
 import { EventEmitter } from 'events';
 import { createLogger } from '@/lib/logger';
@@ -46,14 +48,14 @@ interface VideoClientConstructor {
 const logger = createLogger('videoClient');
 
 export default class VideoClient extends EventEmitter {
-  private closed: boolean = false;
-  private device: object;
+  private closed = false;
+  private device: Device;
   private mediasoupDevice: mediasoupTypes.Device;
   private peer: Peer;
   private displayName: string;
 
-  private svcEnabled: boolean = false;
-  private numOfSimulcastStreams: number = 0;
+  private svcEnabled = false;
+  private numOfSimulcastStreams = 0;
 
   private sendTransport: mediasoupTypes.Transport | null = null;
   private recvTransport: mediasoupTypes.Transport | null = null;
@@ -72,13 +74,12 @@ export default class VideoClient extends EventEmitter {
     const transport = await WebSocketTransport.create(
       url + '?roomId=' + roomId + '&peerId=' + peerId
     );
-    const peer = new Peer(transport);
+    const peer = new Peer(transport, peerId);
 
     const mediasoupDevice = new mediasoup.Device();
-    const routerRtpCapabilities: mediasoupTypes.RtpCapabilities = await peer.request(
-      'getRouterRtpCapabilities',
-      {}
-    );
+    const routerRtpCapabilities: mediasoupTypes.RtpCapabilities = (await peer.request(
+      'getRouterRtpCapabilities'
+    )) as GetRouterRtpCapabilitiesResponse;
 
     await mediasoupDevice.load({ routerRtpCapabilities });
 
@@ -120,9 +121,16 @@ export default class VideoClient extends EventEmitter {
       this.handleNotifications(notification);
     });
 
-    this.peer.addListener('request', (request: Request, accept: Function, reject: Function) => {
-      this.handleRequests(request, accept, reject);
-    });
+    this.peer.addListener(
+      'request',
+      (
+        request: Request,
+        accept: (data?: ResponseData) => void,
+        reject: (reason: string) => void
+      ) => {
+        this.handleRequests(request, accept, reject);
+      }
+    );
   }
 
   close() {
@@ -146,16 +154,16 @@ export default class VideoClient extends EventEmitter {
 
   private async join() {
     try {
-      const produceTransportReq: createWebRtcTransportRequest = {
+      const produceTransportReq: CreateWebRtcTransportRequest = {
         forceTcp: false,
         producing: true,
         consuming: false
       };
 
-      const producerTransportInfo: createWebRtcTransportResponse = await this.peer.request(
+      const producerTransportInfo = (await this.peer.request(
         'createWebRtcTransport',
         produceTransportReq
-      );
+      )) as CreateWebRtcTransportResponse;
 
       this.sendTransport = this.mediasoupDevice.createSendTransport({
         id: producerTransportInfo.id,
@@ -170,7 +178,7 @@ export default class VideoClient extends EventEmitter {
 
       this.sendTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
         if (this.sendTransport) {
-          const req: connectWebRtcTransportRequest = {
+          const req: ConnectWebRtcTransportRequest = {
             transportId: this.sendTransport.id,
             dtlsParameters
           };
@@ -183,7 +191,7 @@ export default class VideoClient extends EventEmitter {
         'produce',
         async ({ kind, rtpParameters, appData }, callback, errback) => {
           if (this.sendTransport) {
-            const req: produceRequest = {
+            const req: ProduceRequest = {
               transportId: this.sendTransport?.id,
               kind: kind,
               rtpParameters: rtpParameters,
@@ -191,25 +199,26 @@ export default class VideoClient extends EventEmitter {
             };
 
             try {
-              const resp: produceResponse = await this.peer.request('produce', req);
+              const resp = (await this.peer.request('produce', req)) as ProduceResponse;
+
               callback({ id: resp.producerId });
-            } catch (error: any) {
-              errback(error);
+            } catch (error) {
+              errback(error as Error);
             }
           }
         }
       );
 
-      const consumerTransportReq: createWebRtcTransportRequest = {
+      const consumerTransportReq: CreateWebRtcTransportRequest = {
         forceTcp: false,
         producing: false,
         consuming: true
       };
 
-      const consumeTransportInfo: createWebRtcTransportResponse = await this.peer.request(
+      const consumeTransportInfo = (await this.peer.request(
         'createWebRtcTransport',
         consumerTransportReq
-      );
+      )) as CreateWebRtcTransportResponse;
 
       this.recvTransport = this.mediasoupDevice.createRecvTransport({
         id: consumeTransportInfo.id,
@@ -224,7 +233,7 @@ export default class VideoClient extends EventEmitter {
 
       this.recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
         if (this.recvTransport) {
-          const req: connectWebRtcTransportRequest = {
+          const req: ConnectWebRtcTransportRequest = {
             transportId: this.recvTransport?.id,
             dtlsParameters: dtlsParameters
           };
@@ -232,16 +241,16 @@ export default class VideoClient extends EventEmitter {
         }
       });
 
-      const joinReq: joinRequest = {
+      const joinReq: JoinRequest = {
         displayName: this.displayName,
         device: this.device,
         rtpCapabilites: this.mediasoupDevice.rtpCapabilities
       };
 
-      const resp: joinResponse = await this.peer.request('join', joinReq);
+      const resp = (await this.peer.request('join', joinReq)) as JoinResponse;
 
       this.emit('join', resp.peers);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('join() failed: %o', error);
     }
   }
@@ -319,7 +328,7 @@ export default class VideoClient extends EventEmitter {
       });
 
       this.producer?.on('trackended', () => {
-        this.disableVideo().catch(() => {});
+        this.disableVideo().catch();
       });
     } catch (error) {
       logger.error('enableVideo() | failed: %o', error);
@@ -343,7 +352,7 @@ export default class VideoClient extends EventEmitter {
       producerId: this.producer.id
     });
 
-    const req: closeProducerRequest = {
+    const req: CloseProducerRequest = {
       producerId: this.producer.id
     };
 
@@ -357,37 +366,35 @@ export default class VideoClient extends EventEmitter {
   private handleNotifications(notification: Notification) {
     switch (notification.method) {
       case 'newPeer': {
-        const newPeerNotificationData: newPeerNotification = notification.data;
-        this.emit('newPeer', newPeerNotificationData);
+        this.emit('newPeer', notification.data as NewPeerNotification);
         break;
       }
 
       case 'peerClosed': {
-        const peerClosedNotificationData: peerClosedNotification = notification.data;
-        this.emit('removePeer', peerClosedNotificationData);
+        this.emit('removePeer', notification.data as PeerClosedNotification);
         break;
       }
 
       case 'consumerClosed': {
-        const { peerId, consumerId }: consumerClosedNotification = notification.data;
+        const { peerId, consumerId } = notification.data as ConsumerClosedNotification;
         logger.info(`Peer {${peerId}} consumer closed event for consumer {${consumerId}}`);
         break;
       }
 
       case 'consumerPaused': {
-        const { peerId, consumerId }: consumerPausedNotification = notification.data;
+        const { peerId, consumerId } = notification.data as ConsumerPausedNotification;
         logger.info(`Peer {${peerId}} consumer paused event for consumer {${consumerId}}`);
         break;
       }
 
       case 'consumerResumed': {
-        const { peerId, consumerId }: consumerResumedNotification = notification.data;
+        const { peerId, consumerId } = notification.data as ConsumerResumedNotification;
         logger.info(`Peer {${peerId}} consumer resumed event for consumer {${consumerId}}`);
         break;
       }
 
       case 'consumerLayersChanged': {
-        const { peerId, consumerId }: consumerLayersChangedNotification = notification.data;
+        const { peerId, consumerId } = notification.data as ConsumerLayersChangedNotification;
         logger.info(`Peer {${peerId}} consumer layers change event for consumer {${consumerId}}`);
         break;
       }
@@ -398,10 +405,14 @@ export default class VideoClient extends EventEmitter {
     }
   }
 
-  private handleRequests(request: Request, accept: Function, reject: Function) {
+  private handleRequests(
+    request: Request,
+    accept: (data?: ResponseData) => void,
+    reject: (reason: string) => void
+  ) {
     switch (request.method) {
       case 'newConsumer': {
-        const consumer: newConsumerRequest = request.data;
+        const consumer = request.data as NewConsumerRequest;
         logger.info('New consumer request, consumer: %o', consumer);
         accept();
         break;
@@ -409,7 +420,7 @@ export default class VideoClient extends EventEmitter {
 
       default:
         logger.warn('unhandled request recived %o', request);
-        reject();
+        reject('unhandled request');
         break;
     }
   }

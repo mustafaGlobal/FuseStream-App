@@ -1,7 +1,7 @@
 import { defineStore, acceptHMRUpdate } from 'pinia';
 import { types as mediasoupTypes } from 'mediasoup-client';
 import { useParticipantStore } from './participant';
-import type { Device } from './participant';
+import type { Device } from '@/lib/video-client/deviceInfo';
 import VideoClient from '@/lib/video-client';
 import shortUUID from 'short-uuid';
 import { createLogger } from '@/lib/logger';
@@ -45,7 +45,7 @@ export const useVideoStore = defineStore('videoStore', {
 
       const uuid: string = shortUUID.generate();
       const displayName: string = 'User-' + uuid;
-      const roomId: string = 'test';
+      const roomId = 'test';
 
       this.client = await VideoClient.create({
         url: url,

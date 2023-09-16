@@ -1,11 +1,6 @@
 import { defineStore, acceptHMRUpdate } from 'pinia';
 import type { VideoParticipant } from './video';
-
-interface Device {
-  flag: string;
-  name: string;
-  version: string;
-}
+import type { Device } from '@/lib/video-client/deviceInfo';
 
 enum AudioStatus {
   NotJoined = 'not-joined',
@@ -88,4 +83,4 @@ if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(useParticipantStore, import.meta.hot));
 }
 
-export type { Participant, Status, VideoStatus, Device };
+export type { Participant, Status, VideoStatus };

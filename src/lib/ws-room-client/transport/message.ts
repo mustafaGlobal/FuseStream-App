@@ -1,22 +1,26 @@
-import { createLogger } from '@/lib/logger';
+import { createLogger } from '../../logger';
 import shortUUID from 'short-uuid';
 import { unmarshallJSON } from '../utils/json';
+
 import type {
   WebSocketMessage,
   RequestResponseMethod,
   Request,
   Response,
   Notification,
-  NotificationMethod
+  NotificationMethod,
+  RequestData,
+  ResponseData,
+  NotificationData
 } from '../types';
 
 import { MsgType } from '../types';
 
-const logger = createLogger('Message');
+const logger = createLogger('transport:message');
 
 class Message {
-  static parse(raw: any): WebSocketMessage | undefined {
-    const [message, error]: [WebSocketMessage, unknown] = unmarshallJSON(raw);
+  static parse(raw: string): WebSocketMessage | undefined {
+    const [message, error] = unmarshallJSON(raw);
     if (error != null) {
       logger.error('parse() | %o', error);
       return;
@@ -27,7 +31,7 @@ class Message {
       return;
     }
 
-    if (typeof message.method !== 'string') {
+    if (typeof message?.method !== 'string') {
       logger.error('parse() | missing/invalid method field');
       return;
     }
@@ -73,7 +77,7 @@ class Message {
     return message;
   }
 
-  static createRequest(method: RequestResponseMethod, data: any): Request {
+  static createRequest(method: RequestResponseMethod, data?: RequestData): Request {
     const req: Request = {
       type: MsgType.Request,
       id: shortUUID.generate(),
@@ -84,7 +88,7 @@ class Message {
     return req;
   }
 
-  static createSuccessResponse(req: Request, data: any): Response {
+  static createSuccessResponse(req: Request, data: ResponseData): Response {
     const resp: Response = {
       type: MsgType.Response,
       method: req.method,
@@ -108,7 +112,7 @@ class Message {
     return response;
   }
 
-  static createNotification(method: NotificationMethod, data: any): Notification {
+  static createNotification(method: NotificationMethod, data: NotificationData): Notification {
     const notification: Notification = {
       type: MsgType.Notification,
       method: method,
