@@ -63,6 +63,8 @@ export default class VideoClient extends EventEmitter {
   private producer: mediasoupTypes.Producer | undefined | null = undefined;
   private consumers: Map<string, mediasoupTypes.Consumer> = new Map();
 
+  private mediaStream: MediaStream | null = null;
+
   static async create({
     url,
     roomId,
@@ -77,6 +79,7 @@ export default class VideoClient extends EventEmitter {
     const peer = new Peer(transport, peerId);
 
     const mediasoupDevice = new mediasoup.Device();
+
     const routerRtpCapabilities: mediasoupTypes.RtpCapabilities = (await peer.request(
       'getRouterRtpCapabilities'
     )) as GetRouterRtpCapabilitiesResponse;
@@ -272,7 +275,7 @@ export default class VideoClient extends EventEmitter {
     let track: MediaStreamTrack | null = null;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           frameRate: { ideal: 15, max: 30 },
           facingMode: 'user'
@@ -280,7 +283,7 @@ export default class VideoClient extends EventEmitter {
         audio: false
       });
 
-      track = stream.getVideoTracks()[0];
+      track = this.mediaStream.getVideoTracks()[0];
 
       const codecOptions: mediasoupTypes.ProducerCodecOptions = {
         videoGoogleStartBitrate: 1000
@@ -315,7 +318,7 @@ export default class VideoClient extends EventEmitter {
 
       this.producer = await this.sendTransport?.produce({ track, encodings, codecOptions });
 
-      this.emit('addProducer', {
+      this.emit('newProducer', {
         id: this.producer?.id,
         paused: this.producer?.paused,
         track: this.producer?.track,
@@ -352,11 +355,16 @@ export default class VideoClient extends EventEmitter {
       producerId: this.producer.id
     });
 
-    const req: CloseProducerRequest = {
+    const req = {
       producerId: this.producer.id
-    };
+    } as CloseProducerRequest;
 
-    this.producer?.close();
+    this.producer.close();
+
+    const tracks = this.mediaStream?.getTracks();
+    tracks?.forEach((track) => {
+      track.stop();
+    });
 
     await this.peer.request('closeProducer', req);
 
@@ -405,15 +413,58 @@ export default class VideoClient extends EventEmitter {
     }
   }
 
-  private handleRequests(
+  private async handleRequests(
     request: Request,
     accept: (data?: ResponseData) => void,
     reject: (reason: string) => void
   ) {
     switch (request.method) {
       case 'newConsumer': {
-        const consumer = request.data as NewConsumerRequest;
-        logger.info('New consumer request, consumer: %o', consumer);
+        const data = request.data as NewConsumerRequest;
+
+        if (!this.recvTransport) {
+          reject('no recive transport');
+          return;
+        }
+
+        const consumer = await this.recvTransport?.consume({
+          id: data.id,
+          producerId: data.producerId,
+          kind: data.kind,
+          rtpParameters: data.rtpParameters,
+          streamId: data.peerId,
+          appData: { ...data.appData, peerId: data.peerId }
+        });
+
+        this.consumers.set(consumer.id, consumer);
+
+        consumer.on('transportclose', () => {
+          this.consumers.delete(consumer.id);
+        });
+
+        if (!consumer.rtpParameters.encodings) {
+          reject('no encodings');
+          return;
+        }
+
+        const { spatialLayers, temporalLayers } = mediasoup.parseScalabilityMode(
+          consumer.rtpParameters.encodings[0].scalabilityMode
+        );
+
+        this.emit('newConsumer', {
+          id: consumer.id,
+          peerId: data.peerId,
+          type: data.type,
+          locallyPaused: false,
+          remotelyPaused: data.producerPaused,
+          spatialLayers: spatialLayers,
+          temporalLayers: temporalLayers,
+          preferredSpatialLayers: spatialLayers - 1,
+          preferredTemporalLayers: temporalLayers - 1,
+          codec: consumer.rtpParameters.codecs[0].mimeType.split('/')[1],
+          track: consumer.track
+        });
+
         accept();
         break;
       }

@@ -2,36 +2,15 @@ import { defineStore, acceptHMRUpdate } from 'pinia';
 import type { VideoParticipant } from './video';
 import type { Device } from '@/lib/video-client/deviceInfo';
 
-enum AudioStatus {
-  NotJoined = 'not-joined',
-  Muted = 'muted',
-  Unmuted = 'unmuted',
-  Talking = 'talking'
-}
-
-enum VideoStatus {
-  NotJoined = 'not-joined',
-  Off = 'off',
-  On = 'on'
-}
-
-enum ScreenSharingStatus {
-  NotJoined = 'not-joined',
-  Viewer = 'viewer',
-  Presenter = 'presenter'
-}
-
-enum ChatStatus {
-  NotJoined = 'not-joined',
-  Joined = 'joined',
-  Typing = 'typing'
-}
-
 interface Status {
-  audio: AudioStatus;
-  video: VideoStatus;
-  screenSharing: ScreenSharingStatus;
-  chat: ChatStatus;
+  audio: 'not-joined' | 'muted' | 'unmuted' | 'talking';
+  video: 'not-joined' | 'off' | 'on';
+  screenSharing: 'not-joined' | 'viewer' | 'presenter';
+  chat: 'not-joined' | 'joined' | 'typing';
+}
+
+interface VideoProducer {
+  track: MediaStreamTrack;
 }
 
 interface Participant {
@@ -39,6 +18,7 @@ interface Participant {
   displayName: string;
   device: Device;
   status: Status;
+  videoProducer: VideoProducer | null;
 }
 
 export const useParticipantStore = defineStore('participantStore', {
@@ -60,15 +40,20 @@ export const useParticipantStore = defineStore('participantStore', {
       if (existingParticipant) {
         existingParticipant.device = videoParticipant.device;
         existingParticipant.displayName = videoParticipant.displayName;
-        existingParticipant.status.video = VideoStatus.Off;
+        existingParticipant.status.video = 'off';
+        existingParticipant.videoProducer = null;
       } else {
         const status: Status = {
-          audio: AudioStatus.NotJoined,
-          video: VideoStatus.Off,
-          screenSharing: ScreenSharingStatus.NotJoined,
-          chat: ChatStatus.NotJoined
+          audio: 'not-joined',
+          video: 'off',
+          screenSharing: 'not-joined',
+          chat: 'not-joined'
         };
-        const newParticipant: Participant = { ...videoParticipant, status: status };
+        const newParticipant: Participant = {
+          ...videoParticipant,
+          status: status,
+          videoProducer: null
+        };
         this.addParticipant(newParticipant);
       }
     },
@@ -83,4 +68,4 @@ if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(useParticipantStore, import.meta.hot));
 }
 
-export type { Participant, Status, VideoStatus };
+export type { Participant, Status };

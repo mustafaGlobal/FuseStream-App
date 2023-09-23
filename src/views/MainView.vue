@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { useVideoStore } from '@/stores/video';
 import { ref, watchEffect } from 'vue';
+import { useDebounceFn } from '@vueuse/core';
 
 const myVideo = ref<HTMLVideoElement>();
+const remoteVideo = ref<HTMLVideoElement>();
 
 const videoStore = useVideoStore();
 
@@ -14,21 +16,21 @@ async function joinRoom() {
   }
 }
 
-async function enableCamera() {
+const enableCamera = useDebounceFn(async () => {
   try {
     await videoStore.enableVideo();
   } catch (error) {
     console.error('Error enabling camera: %o', error);
   }
-}
+}, 100);
 
-async function disableCamera() {
+const disableCamera = useDebounceFn(async () => {
   try {
     await videoStore.disableVideo();
   } catch (error) {
     console.error('Error enabling camera: %o', error);
   }
-}
+}, 100);
 
 joinRoom();
 
@@ -38,6 +40,14 @@ watchEffect(() => {
       const mediaStream = new MediaStream();
       mediaStream.addTrack(videoStore.producer.track);
       myVideo.value.srcObject = mediaStream;
+    }
+  }
+
+  if (remoteVideo.value) {
+    if (videoStore.consumer) {
+      const mediaStream = new MediaStream();
+      mediaStream.addTrack(videoStore.consumer.track);
+      remoteVideo.value.srcObject = mediaStream;
     }
   }
 });
@@ -55,7 +65,7 @@ watchEffect(() => {
         </div>
         <!-- Right Video -->
         <div class="w-full md:w-1/2 px-4">
-          <video id="remote-video" class="w-full h-auto bg-gray-800">
+          <video ref="remoteVideo" muted autoplay class="w-full h-auto bg-gray-800">
             <!-- Add video source here -->
           </video>
         </div>

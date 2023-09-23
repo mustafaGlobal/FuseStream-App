@@ -24,6 +24,20 @@ interface Producer {
   codec: string;
 }
 
+interface Consumer {
+  id: string;
+  peerId: string;
+  type: 'simple' | 'simulcast' | 'svc' | 'pipe';
+  localyPaused: boolean;
+  remotelyPaused: boolean;
+  spatialLayers: number;
+  temporalLayers: number;
+  preferredSpatialLayers: number;
+  preferredTemporalLayers: number;
+  codec: string;
+  track: MediaStreamTrack;
+}
+
 enum Status {
   closed = 'closed',
   connecting = 'connecting',
@@ -35,7 +49,8 @@ export const useVideoStore = defineStore('videoStore', {
     return {
       status: Status.closed as Status,
       client: null as VideoClient | null,
-      producer: null as Producer | null
+      producer: null as Producer | null,
+      consumer: null as Consumer | null
     };
   },
   actions: {
@@ -75,9 +90,14 @@ export const useVideoStore = defineStore('videoStore', {
         participantStore.removeParticipant(data.peerId);
       });
 
-      this.client?.on('addProducer', (producer: Producer) => {
-        logger.info('addProducerEvent %o', producer);
+      this.client.on('newProducer', (producer: Producer) => {
+        logger.debug('newProducer event %o', producer);
         this.producer = producer;
+      });
+
+      this.client.on('newConsumer', (consumer: Consumer) => {
+        logger.debug('newConsumer event %o', consumer);
+        this.consumer = consumer;
       });
 
       this.client.on('close', () => {
@@ -85,10 +105,18 @@ export const useVideoStore = defineStore('videoStore', {
       });
     },
     async enableVideo() {
-      this.client?.enableVideo();
+      if (!this.client) {
+        logger.error('client not created');
+        return;
+      }
+      await this.client.enableVideo();
     },
     async disableVideo() {
-      this.client?.disableVideo();
+      if (!this.client) {
+        logger.error('client not created');
+        return;
+      }
+      await this.client.disableVideo();
     }
   }
 });

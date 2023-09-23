@@ -1,12 +1,12 @@
 import bowser from 'bowser';
 
-interface Device {
+export interface Device {
   flag: string;
   name: string;
   version: string;
 }
 
-const getDeviceInfo = (): Device => {
+export const getDeviceInfo = (): Device => {
   const ua = navigator.userAgent;
   const browser = bowser.getParser(ua);
   let flag;
@@ -26,6 +26,3 @@ const getDeviceInfo = (): Device => {
 
   return device;
 };
-
-export { getDeviceInfo };
-export type { Device };
